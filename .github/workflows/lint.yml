@@ -6,47 +6,26 @@ on:
       - development
 
 # --- FEATURE FLAGS ---
-# Set any of these to "false" to disable that linter for this repo.
-env:
-  ENABLE_RUFF: "true"
-  ENABLE_MYPY: "true"
-  ENABLE_CLANG_FORMAT: "true"
-  ENABLE_CPPCHECK: "true"
-  ENABLE_MARKDOWNLINT: "true"
+# Configure these in repo Settings > Secrets and variables > Actions > Variables.
+# Create each variable and set to "true" or "false" to toggle linters per repo.
+#
+# Required variables:
+#   ENABLE_RUFF           - Python lint + format (Ruff)
+#   ENABLE_MYPY           - Python static type checking (mypy)
+#   ENABLE_CLANG_FORMAT   - C/C++ style enforcement (clang-format)
+#   ENABLE_CPPCHECK       - C/C++ static analysis (cppcheck)
+#   ENABLE_MARKDOWNLINT   - Markdown linting (markdownlint)
+#
+# If a variable is not set, the corresponding job will be skipped.
 
 jobs:
-  # -------------------------------------------------------
-  # Read feature flags into job outputs so other jobs can
-  # reference them in their 'if' conditions.
-  # (workflow-level 'env' is not available in job-level 'if')
-  # -------------------------------------------------------
-  config:
-    name: Read feature flags
-    runs-on: ubuntu-latest
-    outputs:
-      ruff: ${{ steps.flags.outputs.ruff }}
-      mypy: ${{ steps.flags.outputs.mypy }}
-      clang-format: ${{ steps.flags.outputs.clang-format }}
-      cppcheck: ${{ steps.flags.outputs.cppcheck }}
-      markdownlint: ${{ steps.flags.outputs.markdownlint }}
-    steps:
-      - name: Export flags
-        id: flags
-        run: |
-          echo "ruff=$ENABLE_RUFF" >> $GITHUB_OUTPUT
-          echo "mypy=$ENABLE_MYPY" >> $GITHUB_OUTPUT
-          echo "clang-format=$ENABLE_CLANG_FORMAT" >> $GITHUB_OUTPUT
-          echo "cppcheck=$ENABLE_CPPCHECK" >> $GITHUB_OUTPUT
-          echo "markdownlint=$ENABLE_MARKDOWNLINT" >> $GITHUB_OUTPUT
-
   # -------------------------------------------------------
   # Python: Ruff (lint + format check)
   # -------------------------------------------------------
   lint-python-ruff:
     name: Ruff (Python lint + format)
-    needs: config
     runs-on: ubuntu-latest
-    if: ${{ needs.config.outputs.ruff == 'true' }}
+    if: ${{ vars.ENABLE_RUFF == 'true' }}
     steps:
       - uses: actions/checkout@v4
 
@@ -68,9 +47,8 @@ jobs:
   # -------------------------------------------------------
   lint-python-mypy:
     name: mypy (Python types)
-    needs: config
     runs-on: ubuntu-latest
-    if: ${{ needs.config.outputs.mypy == 'true' }}
+    if: ${{ vars.ENABLE_MYPY == 'true' }}
     steps:
       - uses: actions/checkout@v4
 
@@ -93,9 +71,8 @@ jobs:
   # -------------------------------------------------------
   lint-cpp-format:
     name: clang-format (C/C++ style)
-    needs: config
     runs-on: ubuntu-latest
-    if: ${{ needs.config.outputs.clang-format == 'true' }}
+    if: ${{ vars.ENABLE_CLANG_FORMAT == 'true' }}
     steps:
       - uses: actions/checkout@v4
 
@@ -116,9 +93,8 @@ jobs:
   # -------------------------------------------------------
   lint-cpp-cppcheck:
     name: cppcheck (C/C++ analysis)
-    needs: config
     runs-on: ubuntu-latest
-    if: ${{ needs.config.outputs.cppcheck == 'true' }}
+    if: ${{ vars.ENABLE_CPPCHECK == 'true' }}
     steps:
       - uses: actions/checkout@v4
 
@@ -143,9 +119,8 @@ jobs:
   # -------------------------------------------------------
   lint-markdown:
     name: markdownlint
-    needs: config
     runs-on: ubuntu-latest
-    if: ${{ needs.config.outputs.markdownlint == 'true' }}
+    if: ${{ vars.ENABLE_MARKDOWNLINT == 'true' }}
     steps:
       - uses: actions/checkout@v4
 
