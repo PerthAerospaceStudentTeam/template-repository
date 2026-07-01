@@ -6,26 +6,43 @@ on:
       - development
 
 # --- FEATURE FLAGS ---
-# Configure these in repo Settings > Secrets and variables > Actions > Variables.
-# Create each variable and set to "true" or "false" to toggle linters per repo.
-#
-# Required variables:
-#   ENABLE_RUFF           - Python lint + format (Ruff)
-#   ENABLE_MYPY           - Python static type checking (mypy)
-#   ENABLE_CLANG_FORMAT   - C/C++ style enforcement (clang-format)
-#   ENABLE_CPPCHECK       - C/C++ static analysis (cppcheck)
-#   ENABLE_MARKDOWNLINT   - Markdown linting (markdownlint)
-#
-# If a variable is not set, the corresponding job will be skipped.
+# Set any of these to "false" to disable that linter for this repo.
+env:
+  ENABLE_RUFF: "true"
+  ENABLE_MYPY: "true"
+  ENABLE_CLANG_FORMAT: "true"
+  ENABLE_CPPCHECK: "true"
+  ENABLE_MARKDOWNLINT: "true"
 
 jobs:
+  # Workflow-level env cannot be used in job-level `if` conditions, so this
+  # job exposes the feature flags as outputs that downstream jobs can read.
+  lint-config:
+    name: Lint config
+    runs-on: ubuntu-latest
+    outputs:
+      enable_ruff: ${{ steps.flags.outputs.enable_ruff }}
+      enable_mypy: ${{ steps.flags.outputs.enable_mypy }}
+      enable_clang_format: ${{ steps.flags.outputs.enable_clang_format }}
+      enable_cppcheck: ${{ steps.flags.outputs.enable_cppcheck }}
+      enable_markdownlint: ${{ steps.flags.outputs.enable_markdownlint }}
+    steps:
+      - id: flags
+        run: |
+          echo "enable_ruff=${{ env.ENABLE_RUFF }}" >> "$GITHUB_OUTPUT"
+          echo "enable_mypy=${{ env.ENABLE_MYPY }}" >> "$GITHUB_OUTPUT"
+          echo "enable_clang_format=${{ env.ENABLE_CLANG_FORMAT }}" >> "$GITHUB_OUTPUT"
+          echo "enable_cppcheck=${{ env.ENABLE_CPPCHECK }}" >> "$GITHUB_OUTPUT"
+          echo "enable_markdownlint=${{ env.ENABLE_MARKDOWNLINT }}" >> "$GITHUB_OUTPUT"
+
   # -------------------------------------------------------
   # Python: Ruff (lint + format check)
   # -------------------------------------------------------
   lint-python-ruff:
     name: Ruff (Python lint + format)
+    needs: lint-config
     runs-on: ubuntu-latest
-    if: ${{ vars.ENABLE_RUFF == 'true' }}
+    if: needs.lint-config.outputs.enable_ruff == 'true'
     steps:
       - uses: actions/checkout@v4
 
@@ -47,8 +64,9 @@ jobs:
   # -------------------------------------------------------
   lint-python-mypy:
     name: mypy (Python types)
+    needs: lint-config
     runs-on: ubuntu-latest
-    if: ${{ vars.ENABLE_MYPY == 'true' }}
+    if: needs.lint-config.outputs.enable_mypy == 'true'
     steps:
       - uses: actions/checkout@v4
 
@@ -64,15 +82,22 @@ jobs:
           if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
 
       - name: Run mypy
-        run: mypy . --ignore-missing-imports --no-error-summary
+        run: |
+          FILES=$(find . -name "*.py" -not -path "./.git/*" 2>/dev/null)
+          if [ -z "$FILES" ]; then
+            echo "No Python files found, skipping."
+            exit 0
+          fi
+          mypy . --ignore-missing-imports --no-error-summary
 
   # -------------------------------------------------------
   # C/C++: clang-format (style enforcement)
   # -------------------------------------------------------
   lint-cpp-format:
     name: clang-format (C/C++ style)
+    needs: lint-config
     runs-on: ubuntu-latest
-    if: ${{ vars.ENABLE_CLANG_FORMAT == 'true' }}
+    if: needs.lint-config.outputs.enable_clang_format == 'true'
     steps:
       - uses: actions/checkout@v4
 
@@ -93,8 +118,9 @@ jobs:
   # -------------------------------------------------------
   lint-cpp-cppcheck:
     name: cppcheck (C/C++ analysis)
+    needs: lint-config
     runs-on: ubuntu-latest
-    if: ${{ vars.ENABLE_CPPCHECK == 'true' }}
+    if: needs.lint-config.outputs.enable_cppcheck == 'true'
     steps:
       - uses: actions/checkout@v4
 
@@ -103,24 +129,29 @@ jobs:
 
       - name: Run cppcheck
         run: |
+          FILES=$(find . \( -name "*.cpp" -o -name "*.cc" -o -name "*.c" -o -name "*.h" -o -name "*.hpp" \) -not -path "./.git/*" 2>/dev/null)
+          if [ -z "$FILES" ]; then
+            echo "No C/C++ files found, skipping."
+            exit 0
+          fi
           SUPPRESS=""
           if [ -f .cppcheck-suppressions ]; then
             SUPPRESS="--suppressions-list=.cppcheck-suppressions"
           fi
-          cppcheck \
+          echo "$FILES" | xargs cppcheck \
             --error-exitcode=1 \
             --enable=warning,style,performance \
             --inline-suppr \
-            $SUPPRESS \
-            .
+            $SUPPRESS
 
   # -------------------------------------------------------
   # Markdown: markdownlint
   # -------------------------------------------------------
   lint-markdown:
     name: markdownlint
+    needs: lint-config
     runs-on: ubuntu-latest
-    if: ${{ vars.ENABLE_MARKDOWNLINT == 'true' }}
+    if: needs.lint-config.outputs.enable_markdownlint == 'true'
     steps:
       - uses: actions/checkout@v4
 
